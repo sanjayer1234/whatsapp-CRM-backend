@@ -33,8 +33,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Run tests
-        run: |
-          echo "Run your test commands here"
+        run: echo "Run your test commands here"
 
   delete-feature:
     if: github.event_name == 'delete' && startsWith(github.ref, 'refs/heads/feature')
@@ -44,7 +43,6 @@ jobs:
       - uses: aws-actions/setup-sam@v2
         with:
           use-installer: true
-
       - name: Assume the testing pipeline user role
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -55,10 +53,10 @@ jobs:
           role-session-name: testing-packaging
           role-duration-seconds: 3600
           role-skip-session-tagging: true
-
       - name: Delete feature branch stack
         env:
           FEATURE_BRANCH_NAME: ${{ github.ref }}
+          TESTING_REGION: ${{ env.TESTING_REGION }}
         run: |
           sam delete \
             --stack-name $(echo ${FEATURE_BRANCH_NAME##*/} | tr -cd '[a-zA-Z0-9-]') \
@@ -75,8 +73,7 @@ jobs:
         with:
           use-installer: true
       - name: Build SAM app
-        run: sam build --template ${SAM_TEMPLATE} --use-container
-
+        run: sam build --template ${{ env.SAM_TEMPLATE }} --use-container
       - name: Assume the testing pipeline user role
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -87,9 +84,14 @@ jobs:
           role-session-name: feature-deployment
           role-duration-seconds: 3600
           role-skip-session-tagging: true
-
       - name: Deploy feature stack
         shell: bash
+        env:
+          GITHUB_REF: ${{ github.ref }}
+          TESTING_REGION: ${{ env.TESTING_REGION }}
+          TESTING_ARTIFACTS_BUCKET: ${{ env.TESTING_ARTIFACTS_BUCKET }}
+          TESTING_IMAGE_REPOSITORY: ${{ env.TESTING_IMAGE_REPOSITORY }}
+          TESTING_CLOUDFORMATION_EXECUTION_ROLE: ${{ env.TESTING_CLOUDFORMATION_EXECUTION_ROLE }}
         run: |
           sam deploy --stack-name $(echo ${GITHUB_REF##*/} | tr -cd '[a-zA-Z0-9-]') \
             --capabilities CAPABILITY_IAM \
@@ -108,10 +110,8 @@ jobs:
       - uses: aws-actions/setup-sam@v2
         with:
           use-installer: true
-
       - name: Build resources
-        run: sam build --template ${SAM_TEMPLATE} --use-container
-
+        run: sam build --template ${{ env.SAM_TEMPLATE }} --use-container
       - name: Assume the testing pipeline user role
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -122,39 +122,42 @@ jobs:
           role-session-name: testing-packaging
           role-duration-seconds: 3600
           role-skip-session-tagging: true
-
-      - name: Upload artifacts to testing artifact buckets
+      - name: Upload artifacts to testing artifact bucket
+        env:
+          TESTING_ARTIFACTS_BUCKET: ${{ env.TESTING_ARTIFACTS_BUCKET }}
+          TESTING_IMAGE_REPOSITORY: ${{ env.TESTING_IMAGE_REPOSITORY }}
+          TESTING_REGION: ${{ env.TESTING_REGION }}
         run: |
           sam package \
             --s3-bucket ${TESTING_ARTIFACTS_BUCKET} \
             --image-repository ${TESTING_IMAGE_REPOSITORY} \
             --region ${TESTING_REGION} \
             --output-template-file packaged-testing.yaml
-
       - uses: actions/upload-artifact@v4
         with:
           name: packaged-testing.yaml
           path: packaged-testing.yaml
-
       - name: Assume the prod pipeline user role
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ env.PIPELINE_USER_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ env.PIPELINE_USER_SECRET_ACCESS_KEY }}
-          aws-region: ${PROD_REGION}
+          aws-region: ${{ env.PROD_REGION }}
           role-to-assume: ${{ env.PROD_PIPELINE_EXECUTION_ROLE }}
           role-session-name: prod-packaging
           role-duration-seconds: 3600
           role-skip-session-tagging: true
-
-      - name: Upload artifacts to production artifact buckets
+      - name: Upload artifacts to production artifact bucket
+        env:
+          PROD_ARTIFACTS_BUCKET: ${{ env.PROD_ARTIFACTS_BUCKET }}
+          PROD_IMAGE_REPOSITORY: ${{ env.PROD_IMAGE_REPOSITORY }}
+          PROD_REGION: ${{ env.PROD_REGION }}
         run: |
           sam package \
             --s3-bucket ${PROD_ARTIFACTS_BUCKET} \
             --image-repository ${PROD_IMAGE_REPOSITORY} \
             --region ${PROD_REGION} \
             --output-template-file packaged-prod.yaml
-
       - uses: actions/upload-artifact@v4
         with:
           name: packaged-prod.yaml
@@ -172,7 +175,6 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: packaged-testing.yaml
-
       - name: Assume the testing pipeline user role
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -183,8 +185,13 @@ jobs:
           role-session-name: testing-deployment
           role-duration-seconds: 3600
           role-skip-session-tagging: true
-
       - name: Deploy to testing account
+        env:
+          TESTING_STACK_NAME: ${{ env.TESTING_STACK_NAME }}
+          TESTING_REGION: ${{ env.TESTING_REGION }}
+          TESTING_ARTIFACTS_BUCKET: ${{ env.TESTING_ARTIFACTS_BUCKET }}
+          TESTING_IMAGE_REPOSITORY: ${{ env.TESTING_IMAGE_REPOSITORY }}
+          TESTING_CLOUDFORMATION_EXECUTION_ROLE: ${{ env.TESTING_CLOUDFORMATION_EXECUTION_ROLE }}
         run: |
           sam deploy --stack-name ${TESTING_STACK_NAME} \
             --template packaged-testing.yaml \
@@ -202,8 +209,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Run integration tests
-        run: |
-          echo "Run integration tests here"
+        run: echo "Run integration tests here"
 
   deploy-prod:
     if: github.ref == 'refs/heads/main'
@@ -219,7 +225,6 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: packaged-prod.yaml
-
       - name: Assume the prod pipeline user role
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -230,8 +235,13 @@ jobs:
           role-session-name: prod-deployment
           role-duration-seconds: 3600
           role-skip-session-tagging: true
-
       - name: Deploy to production account
+        env:
+          PROD_STACK_NAME: ${{ env.PROD_STACK_NAME }}
+          PROD_REGION: ${{ env.PROD_REGION }}
+          PROD_ARTIFACTS_BUCKET: ${{ env.PROD_ARTIFACTS_BUCKET }}
+          PROD_IMAGE_REPOSITORY: ${{ env.PROD_IMAGE_REPOSITORY }}
+          PROD_CLOUDFORMATION_EXECUTION_ROLE: ${{ env.PROD_CLOUDFORMATION_EXECUTION_ROLE }}
         run: |
           sam deploy --stack-name ${PROD_STACK_NAME} \
             --template packaged-prod.yaml \
