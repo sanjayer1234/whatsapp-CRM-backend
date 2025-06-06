@@ -1,1 +1,17 @@
+# Environment
 .env
+lambda_package/.env
+
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# Node.js
+node_modules/
+
+# Zip files
+*.zip
+
+# Executables
+*.exe
