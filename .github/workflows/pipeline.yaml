@@ -1,4 +1,4 @@
-name: Deploy SAM App
+name: Deploy SAM Application
 
 on:
   push:
@@ -10,26 +10,27 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+    - name: Checkout code
+      uses: actions/checkout@v3
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: 3.9
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
 
-      - name: Install AWS SAM CLI
-        uses: aws-actions/setup-sam@v2
+    - name: Install AWS SAM CLI
+      run: |
+        pip install aws-sam-cli
 
-      - name: Build SAM app
-        run: sam build --template-file template.yaml
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ap-south-1
 
-      - name: Deploy SAM app
-        run: |
-          sam deploy --no-confirm-changeset --no-fail-on-empty-changeset \
-            --stack-name whatsapp-crm-stack \
-            --capabilities CAPABILITY_IAM \
-            --region ap-south-1
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+    - name: Build with SAM
+      run: sam build
+
+    - name: Deploy with SAM
+      run: sam deploy --no-confirm-changeset --no-fail-on-empty-changeset --stack-name whatsapp-crm-stack --capabilities CAPABILITY_IAM --region ap-south-1
